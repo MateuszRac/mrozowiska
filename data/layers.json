@@ -1,0 +1,256 @@
+{
+ "title": "Mrozowiska w Polsce - mapa interaktywna",
+ "created": "2026-09-25T08:59:35+00:00",
+ "bounds": [
+  [
+   48.9,
+   14.0
+  ],
+  [
+   55.0,
+   24.3
+  ]
+ ],
+ "minNativeZoom": 6,
+ "modelLabel": "U-Net po treningu na Kaggle (GPU), najlepsza epoka 9 z 29",
+ "hillshade": {
+  "tiles": "data/tiles/hillshade",
+  "maxZoom": 10,
+  "scale": 0.004509803921568627,
+  "description": "adaptacyjne przewyższenie 1,5-6× wg lokalnej deniwelacji (okno 21 km)"
+ },
+ "tilesRoot": "data/tiles",
+ "layers": [
+  {
+   "id": "elevation",
+   "name": "Wysokość n.p.m.",
+   "group": "Topografia",
+   "unit": "m",
+   "tiles": "elevation",
+   "offset": -200.0,
+   "scale": 0.1,
+   "max_zoom": 10,
+   "palette": "hipsometria",
+   "range": [
+    -150,
+    2600
+   ],
+   "scale_type": "linear",
+   "symmetric": false,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "NMT GUGiK 100 m (PL-EVRF2007-NH). Skala stała: atlasowe progi hipsometrii; dynamiczna/ręczna: ciągła paleta rozciągnięta na zakres."
+  },
+  {
+   "id": "tpi",
+   "name": "Topographic Position Index (r = 2 km)",
+   "group": "Parametry NMT",
+   "unit": "m",
+   "tiles": "tpi",
+   "offset": -1000.0,
+   "scale": 0.05,
+   "max_zoom": 10,
+   "palette": "RdBu_r",
+   "range": [
+    -20,
+    20
+   ],
+   "scale_type": "linear",
+   "symmetric": true,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "Wysokość minus średnia w promieniu 2 km. Ujemny: dna dolin i obniżenia."
+  },
+  {
+   "id": "depression",
+   "name": "Głębokość zagłębień bezodpływowych",
+   "group": "Parametry NMT",
+   "unit": "m",
+   "tiles": "depression",
+   "offset": 0.0,
+   "scale": 0.01,
+   "max_zoom": 10,
+   "palette": "Blues",
+   "range": [
+    0.1,
+    10
+   ],
+   "scale_type": "log",
+   "symmetric": false,
+   "zero_as_background": true,
+   "dynamic": true,
+   "classes": [],
+   "description": "Priority-flood fill minus NMT: zamknięte niecki bez odpływu."
+  },
+  {
+   "id": "twi",
+   "name": "Topographic Wetness Index",
+   "group": "Parametry NMT",
+   "unit": "–",
+   "tiles": "twi",
+   "offset": 0.0,
+   "scale": 0.005,
+   "max_zoom": 10,
+   "palette": "YlGnBu",
+   "range": [
+    6,
+    16
+   ],
+   "scale_type": "linear",
+   "symmetric": false,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "ln(a / tan β): spływ i gromadzenie na płaskich dnach dolin."
+  },
+  {
+   "id": "anomaly_model",
+   "name": "Przewidywana anomalia nocna (model)",
+   "group": "Model",
+   "unit": "K",
+   "tiles": "anomaly_model",
+   "offset": -60.0,
+   "scale": 0.002,
+   "max_zoom": 9,
+   "palette": "RdBu_r",
+   "range": [
+    -2.5,
+    2.5
+   ],
+   "scale_type": "linear",
+   "symmetric": true,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "U-Net po treningu na Kaggle (GPU), najlepsza epoka 9 z 29. Anomalia LST względem otoczenia (σ = 10 km); model 1 km, wygładzony dwuliniowo."
+  },
+  {
+   "id": "cap_classes",
+   "name": "Klasy mrozowisk (model)",
+   "group": "Model",
+   "unit": "K",
+   "tiles": "anomaly_model",
+   "offset": -60.0,
+   "scale": 0.002,
+   "max_zoom": 9,
+   "palette": "klasy",
+   "range": [
+    -2.5,
+    2.5
+   ],
+   "scale_type": "classes",
+   "symmetric": false,
+   "zero_as_background": false,
+   "dynamic": false,
+   "classes": [
+    {
+     "max": -0.5,
+     "min": -1.0,
+     "label": "słabe (−0,5 do −1 K)",
+     "color": "#c6dbef"
+    },
+    {
+     "max": -1.0,
+     "min": -1.5,
+     "label": "umiarkowane (−1 do −1,5 K)",
+     "color": "#6baed6"
+    },
+    {
+     "max": -1.5,
+     "min": -2.0,
+     "label": "silne (−1,5 do −2 K)",
+     "color": "#2171b5"
+    },
+    {
+     "max": -2.0,
+     "min": null,
+     "label": "bardzo silne (≤ −2 K)",
+     "color": "#08306b"
+    }
+   ],
+   "description": "U-Net po treningu na Kaggle (GPU), najlepsza epoka 9 z 29. Klasy przewidywanej anomalii."
+  },
+  {
+   "id": "anomaly_observed",
+   "name": "Obserwowana anomalia nocna (VIIRS)",
+   "group": "Obserwacje",
+   "unit": "K",
+   "tiles": "anomaly_observed",
+   "offset": -60.0,
+   "scale": 0.002,
+   "max_zoom": 9,
+   "palette": "RdBu_r",
+   "range": [
+    -2.5,
+    2.5
+   ],
+   "scale_type": "linear",
+   "symmetric": true,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "Średnia anomalia z 2222 nocy VIIRS 2023–2026 (00–05 UTC), piksele 1 km (bez wygładzania), tylko piksele z ≥ 20 nocami."
+  },
+  {
+   "id": "anomaly_diff",
+   "name": "Różnica: obserwacje VIIRS − model",
+   "group": "Porównanie",
+   "unit": "K",
+   "tiles": "anomaly_diff",
+   "offset": -60.0,
+   "scale": 0.002,
+   "max_zoom": 9,
+   "palette": "RdBu_r",
+   "range": [
+    -1.5,
+    1.5
+   ],
+   "scale_type": "linear",
+   "symmetric": true,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "Obserwowana (VIIRS) minus przewidywana anomalia [K], piksele 1 km z ≥ 20 nocami. Dodatnia (czerwona): w rzeczywistości cieplej, niż wynikałoby z topografii (model zawyża mrozowisko); ujemna (niebieska): zimniej, niż przewiduje model (model nie docenia mrozowiska). W domenie uczenia średnio −0,02 K, RMSE 0,58 K (bloki treningowe 0,51 K, testowe - teren niewidziany przy uczeniu - 0,67 K). Jeziora (średnio +2,9 K) i miasta (+0,4 K) były poza domeną uczenia: model nie zna ich nocnego ciepła."
+  }
+ ],
+ "boundaries": {
+  "wojewodztwa": "data/granice_wojewodztwa.geojson",
+  "powiaty": "data/granice_powiaty.geojson",
+  "gminy": "data/granice_gminy.geojson"
+ },
+ "stations": "data/stacje.csv",
+ "residuals": {
+  "domena": {
+   "n": 298671,
+   "bias": -0.0152940908446908,
+   "rmse": 0.5783706307411194
+  },
+  "trening": {
+   "n": 177691,
+   "bias": -0.013605685904622078,
+   "rmse": 0.5094789862632751
+  },
+  "walidacja": {
+   "n": 44939,
+   "bias": -0.014523646794259548,
+   "rmse": 0.7015388607978821
+  },
+  "test": {
+   "n": 42365,
+   "bias": -0.029525432735681534,
+   "rmse": 0.6695200204849243
+  },
+  "miasta": {
+   "n": 9116,
+   "bias": 0.4348418712615967,
+   "rmse": 0.9946954846382141
+  },
+  "wody": {
+   "n": 3259,
+   "bias": 2.926750421524048,
+   "rmse": 3.798691987991333
+  }
+ }
+}

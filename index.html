@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mrozowiska w Polsce</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232166ac'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="panel" aria-label="Panel sterowania mapą">
+    <header class="panel-head">
+      <h1>Mrozowiska w Polsce</h1>
+      <p class="subtitle">NMT GUGiK · nocne LST VIIRS · U-Net</p>
+    </header>
+
+    <section>
+      <h2>Podkład</h2>
+      <div id="layer-list" class="layer-list"></div>
+      <p id="layer-desc" class="note"></p>
+    </section>
+
+    <section id="scale-section">
+      <h2>Skala barwna</h2>
+      <div id="scale-controls">
+        <div class="field">
+          <label for="palette">Paleta</label>
+          <select id="palette"></select>
+        </div>
+        <label class="inline"><input type="checkbox" id="reverse"> odwróć paletę</label>
+        <div class="segmented" role="radiogroup" aria-label="Zakres skali">
+          <label><input type="radio" name="mode" value="fixed" checked><span>Stała</span></label>
+          <label><input type="radio" name="mode" value="dynamic"><span>Dynamiczna</span></label>
+          <label><input type="radio" name="mode" value="manual"><span>Ręczna</span></label>
+        </div>
+        <div class="field" id="manual-range">
+          <input type="number" id="range-min" step="any" aria-label="Minimum skali">
+          <span>–</span>
+          <input type="number" id="range-max" step="any" aria-label="Maksimum skali">
+          <span class="unit"></span>
+        </div>
+        <label class="inline" id="symmetric-wrap"><input type="checkbox" id="symmetric"> symetryczna względem 0</label>
+      </div>
+      <div id="legend" class="legend"></div>
+      <p id="scale-note" class="note"></p>
+    </section>
+
+    <section>
+      <h2>Wyświetlanie</h2>
+      <label class="inline"><input type="checkbox" id="hillshade-on" checked> cieniowanie rzeźby</label>
+      <div class="field slider">
+        <label for="hillshade-strength">intensywność</label>
+        <input type="range" id="hillshade-strength" min="0" max="1" step="0.05" value="0.7">
+      </div>
+      <div class="field slider">
+        <label for="opacity">krycie podkładu</label>
+        <input type="range" id="opacity" min="0" max="1" step="0.05" value="1">
+      </div>
+      <div class="field">
+        <label for="basemap">mapa tła</label>
+        <select id="basemap">
+          <option value="none">brak</option>
+          <option value="osm" selected>OpenStreetMap</option>
+        </select>
+      </div>
+    </section>
+
+    <section>
+      <h2>Granice</h2>
+      <label class="inline"><input type="checkbox" data-boundary="wojewodztwa" checked> województwa</label>
+      <label class="inline"><input type="checkbox" data-boundary="powiaty"> powiaty</label>
+      <label class="inline"><input type="checkbox" data-boundary="gminy"> gminy</label>
+    </section>
+
+    <section>
+      <h2>Stacje</h2>
+      <label class="inline"><input type="checkbox" id="stations-on" checked> pokaż stacje</label>
+      <label class="inline"><input type="checkbox" id="station-labels"> nazwy (od zoomu 9)</label>
+      <div class="field">
+        <input type="search" id="station-search" list="station-names" placeholder="Szukaj stacji…" aria-label="Szukaj stacji">
+        <datalist id="station-names"></datalist>
+      </div>
+      <div class="cat-actions">
+        <button type="button" id="cats-all">wszystkie</button>
+        <button type="button" id="cats-none">żadne</button>
+      </div>
+      <div id="category-list" class="category-list"></div>
+      <label class="file-btn">Wczytaj własny CSV…<input type="file" id="csv-file" accept=".csv,text/csv"></label>
+      <p class="note">Wymagane kolumny: <code>nazwa</code>, <code>lon</code>, <code>lat</code>,
+        <code>kategoria</code>; pozostałe kolumny pojawią się w dymku stacji.</p>
+    </section>
+
+    <footer id="credits" class="note"></footer>
+  </aside>
+
+  <button id="panel-toggle" type="button" aria-controls="panel" aria-expanded="true" title="Pokaż/ukryj panel">☰</button>
+  <main id="map" aria-label="Mapa"></main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
