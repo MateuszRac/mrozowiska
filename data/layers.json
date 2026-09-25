@@ -1,6 +1,6 @@
 {
  "title": "Mrozowiska w Polsce - mapa interaktywna",
- "created": "2026-09-25T08:59:35+00:00",
+ "created": "2026-09-25T13:27:42+00:00",
  "bounds": [
   [
    48.9,
@@ -252,5 +252,37 @@
    "bias": 2.926750421524048,
    "rmse": 3.798691987991333
   }
+ },
+ "regions": {
+  "files": {
+   "megaregiony": "data/regiony_megaregiony.geojson",
+   "prowincje": "data/regiony_prowincje.geojson",
+   "podprowincje": "data/regiony_podprowincje.geojson",
+   "makroregiony": "data/regiony_makroregiony.geojson",
+   "mezoregiony": "data/regiony_mezoregiony.geojson"
+  },
+  "levels": [
+   {
+    "key": "megaregiony",
+    "label": "megaregion"
+   },
+   {
+    "key": "prowincje",
+    "label": "prowincja"
+   },
+   {
+    "key": "podprowincje",
+    "label": "podprowincja"
+   },
+   {
+    "key": "makroregiony",
+    "label": "makroregion"
+   },
+   {
+    "key": "mezoregiony",
+    "label": "mezoregion"
+   }
+  ],
+  "source": "Solon J., Borzyszkowski J. i in., 2018. Physico-geographical mesoregions of Poland - verification and adjustment of boundaries on the basis of contemporary spatial data. Geographia Polonica 91(2)"
  }
 }

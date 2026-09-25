@@ -263,6 +263,8 @@ const DataLayer = L.GridLayer.extend({
 const map = L.map("map", { zoomControl: true, preferCanvas: true, minZoom: 5, maxZoom: 15 });
 map.createPane("data").style.zIndex = 300;
 map.createPane("bounds").style.zIndex = 420;
+map.createPane("regionLabels").style.zIndex = 450; // podpisy regionów: nad liniami, pod stacjami
+map.getPane("regionLabels").style.pointerEvents = "none";
 map.getPane("bounds").style.pointerEvents = "none";
 
 const BASEMAPS = {
@@ -407,11 +409,10 @@ function updateValueBox(latlng) {
 }
 
 map.on("mousemove", (e) => updateValueBox(e.latlng));
-map.on("click", async (e) => {
-  const popup = L.popup({ maxWidth: 360 }).setLatLng(e.latlng).setContent("…").openOn(map);
-  const rows = await sampleAll(e.latlng);
-  popup.setContent(`<div class="popup"><h3>${e.latlng.lat.toFixed(4)}° N, ${e.latlng.lng.toFixed(4)}° E</h3>` +
-    `<table>${samplesTable(rows)}</table></div>`);
+map.on("click", (e) => {
+  const popup = L.popup({ maxWidth: 380 }).setLatLng(e.latlng).setContent("…").openOn(map);
+  const head = `<div class="popup"><h3>${e.latlng.lat.toFixed(4)}° N, ${e.latlng.lng.toFixed(4)}° E</h3><table>`;
+  fillPopup((html) => popup.setContent(html), head, e.latlng);
 });
 map.on("moveend", scheduleDynamicRange);
 
@@ -546,6 +547,73 @@ function bindDisplayControls() {
   });
 }
 
+// ---- dane wektorowe: granice PRG, regiony fizycznogeograficzne, położenie punktu -------------
+
+const geojsonCache = new Map(); // adres -> Promise<GeoJSON>
+function loadGeoJSON(url) {
+  if (!geojsonCache.has(url)) {
+    const p = fetchWithRetry(versioned(url)).then((r) => {
+      if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+      return r.json();
+    });
+    p.catch(() => geojsonCache.delete(url)); // błąd: następna próba pobierze ponownie
+    geojsonCache.set(url, p);
+  }
+  return geojsonCache.get(url);
+}
+
+function polygonsOf(geom) {
+  if (!geom) return [];
+  if (geom.type === "Polygon") return [geom.coordinates];
+  if (geom.type === "MultiPolygon") return geom.coordinates;
+  if (geom.type === "GeometryCollection") return geom.geometries.flatMap(polygonsOf);
+  return [];
+}
+
+// Indeks obiektów: poligony + prostokąt otaczający (lon/lat), od największych (kolejność podpisów).
+const featureIndexes = new Map(); // adres -> Promise<Array>
+function featureIndex(url) {
+  if (!featureIndexes.has(url)) {
+    const p = loadGeoJSON(url).then((gj) => gj.features.map((f) => {
+      const polys = polygonsOf(f.geometry);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const poly of polys) {
+        for (const [x, y] of poly[0]) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+      return { props: f.properties, polys, bbox: [x0, y0, x1, y1] };
+    }).sort((a, b) => (b.props.pow_km2 || 0) - (a.props.pow_km2 || 0)));
+    p.catch(() => featureIndexes.delete(url));
+    featureIndexes.set(url, p);
+  }
+  return featureIndexes.get(url);
+}
+
+function ringContains(ring, x, y) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function findFeature(index, latlng) {
+  const x = latlng.lng, y = latlng.lat;
+  for (const f of index) {
+    const [x0, y0, x1, y1] = f.bbox;
+    if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    for (const poly of f.polys) {
+      if (ringContains(poly[0], x, y) && !poly.slice(1).some((hole) => ringContains(hole, x, y))) return f.props;
+    }
+  }
+  return null;
+}
+
 const BOUNDARY_STYLE = {
   wojewodztwa: { color: "#111", weight: 1.8, fill: false },
   powiaty: { color: "#333", weight: 0.9, fill: false },
@@ -555,8 +623,8 @@ const boundaryLayers = {};
 
 async function toggleBoundary(key, on) {
   if (on && !boundaryLayers[key]) {
-    const data = await (await fetch(versioned(state.manifest.boundaries[key]))).json();
-    boundaryLayers[key] = L.geoJSON(data, { style: BOUNDARY_STYLE[key], pane: "bounds", interactive: false });
+    const data = await loadGeoJSON(state.manifest.boundaries[key]);
+    boundaryLayers[key] ||= L.geoJSON(data, { style: BOUNDARY_STYLE[key], pane: "bounds", interactive: false });
   }
   if (!boundaryLayers[key]) return;
   if (on) boundaryLayers[key].addTo(map); else map.removeLayer(boundaryLayers[key]);
@@ -567,6 +635,168 @@ function bindBoundaryControls() {
     cb.addEventListener("change", () => toggleBoundary(cb.dataset.boundary, cb.checked));
     if (cb.checked) toggleBoundary(cb.dataset.boundary, true);
   });
+}
+
+// Regionalizacja fizycznogeograficzna (Solon i in. 2018): od megaregionów do mezoregionów.
+// Linie i podpisy w odcieniach fioletu - odróżniają się od szarych granic administracyjnych.
+const REGION_STYLE = {
+  megaregiony: { color: "#3b0a55", weight: 3.4, fill: false },
+  prowincje: { color: "#55176f", weight: 2.7, fill: false },
+  podprowincje: { color: "#712689", weight: 2.0, fill: false },
+  makroregiony: { color: "#8c35a3", weight: 1.4, fill: false },
+  mezoregiony: { color: "#a54bbb", weight: 0.9, fill: false, dashArray: "5 3" },
+};
+const REGION_LABEL_FONT = { // podpisy ciemniejsze od linii - czytelne na kolorowym podkładzie
+  megaregiony: { size: 15, weight: 700, upper: true, color: "#2c0640" },
+  prowincje: { size: 14, weight: 700, upper: true, color: "#3f0f55" },
+  podprowincje: { size: 13, weight: 600, color: "#53176a" },
+  makroregiony: { size: 12, weight: 600, italic: true, color: "#61207a" },
+  mezoregiony: { size: 11, weight: 600, color: "#6a2782" },
+};
+const REGION_ATTRIBUTION = "regiony: Solon i in. 2018";
+const regions = { layers: {}, index: {}, visible: new Set(), labels: true, labelGroup: L.layerGroup(), icons: new Map() };
+
+function regionLevels() { return state.manifest.regions ? state.manifest.regions.levels : []; }
+
+async function toggleRegion(key, on) {
+  if (on) regions.visible.add(key); else regions.visible.delete(key);
+  if (on && !regions.layers[key]) {
+    const url = state.manifest.regions.files[key];
+    const [data, index] = await Promise.all([loadGeoJSON(url), featureIndex(url)]);
+    regions.index[key] = index;
+    regions.layers[key] ||= L.geoJSON(data, {
+      style: REGION_STYLE[key], pane: "bounds", interactive: false, attribution: REGION_ATTRIBUTION,
+    });
+  }
+  // od najdrobniejszego poziomu: grube linie wyższych jednostek rysowane na wierzchu
+  for (const lv of [...regionLevels()].reverse()) {
+    const layer = regions.layers[lv.key];
+    if (!layer) continue;
+    map.removeLayer(layer);
+    if (regions.visible.has(lv.key)) layer.addTo(map);
+  }
+  updateRegionLabels();
+}
+
+const measureCtx = document.createElement("canvas").getContext("2d");
+function splitLabel(text) {
+  if (text.length <= 22) return [text];
+  const mid = text.length / 2;
+  let best = -1;
+  for (let i = text.indexOf(" "); i >= 0; i = text.indexOf(" ", i + 1)) {
+    if (best < 0 || Math.abs(i - mid) < Math.abs(best - mid)) best = i;
+  }
+  return best < 0 ? [text] : [text.slice(0, best), text.slice(best + 1)];
+}
+
+// Ikona podpisu z wymiarami w pikselach (potrzebne do wykrywania kolizji).
+function regionLabelIcon(key, props) {
+  const id = `${key}/${props.kod}`;
+  if (!regions.icons.has(id)) {
+    const f = REGION_LABEL_FONT[key];
+    const lines = splitLabel(f.upper ? props.nazwa.toLocaleUpperCase("pl-PL") : props.nazwa);
+    measureCtx.font = `${f.italic ? "italic " : ""}${f.weight} ${f.size}px ${getComputedStyle(document.body).fontFamily}`;
+    const spacing = f.upper ? Math.max(...lines.map((l) => l.length)) : 0; // letter-spacing 1px
+    const w = Math.ceil(Math.max(...lines.map((l) => measureCtx.measureText(l).width)) + spacing);
+    const h = Math.ceil(lines.length * f.size * 1.2);
+    const html = `<div style="color:${f.color};font-size:${f.size}px;font-weight:${f.weight};` +
+      `${f.italic ? "font-style:italic;" : ""}${f.upper ? "letter-spacing:1px;" : ""}">${lines.join("<br>")}</div>`;
+    regions.icons.set(id, { w, h, icon: L.divIcon({ className: "region-label", html, iconSize: [w, h], iconAnchor: [w / 2, h / 2] }) });
+  }
+  return regions.icons.get(id);
+}
+
+// Podpisy: od wyższych poziomów i od największych regionów; pomijane, gdy nachodzą na już
+// postawione albo gdy region jest na ekranie za mały na swoją nazwę.
+function updateRegionLabels() {
+  regions.labelGroup.clearLayers();
+  if (!regions.labels) return;
+  const size = map.getSize();
+  const mPerPx = (40075016.7 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / (256 * 2 ** map.getZoom());
+  const placed = [];
+  for (const lv of regionLevels()) {
+    if (!regions.visible.has(lv.key) || !regions.index[lv.key]) continue;
+    for (const f of regions.index[lv.key]) {
+      const { w, h, icon } = regionLabelIcon(lv.key, f.props);
+      const [lon, lat] = f.props.etykieta;
+      const p = map.latLngToContainerPoint([lat, lon]);
+      const box = { x0: p.x - w / 2 - 4, x1: p.x + w / 2 + 4, y0: p.y - h / 2 - 3, y1: p.y + h / 2 + 3 };
+      if (box.x1 < 0 || box.y1 < 0 || box.x0 > size.x || box.y0 > size.y) continue;
+      const nw = map.latLngToContainerPoint([f.bbox[3], f.bbox[0]]);
+      const se = map.latLngToContainerPoint([f.bbox[1], f.bbox[2]]);
+      const side = Math.sqrt(f.props.pow_km2 * 1e6) / mPerPx; // bok kwadratu o polu regionu [px]
+      if (se.x - nw.x < 0.8 * w || se.y - nw.y < 1.5 * h || side < 0.6 * w) continue;
+      if (placed.some((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1)) continue;
+      placed.push(box);
+      regions.labelGroup.addLayer(L.marker([lat, lon], { icon, pane: "regionLabels", interactive: false, keyboard: false }));
+    }
+  }
+}
+
+function bindRegionControls() {
+  if (!state.manifest.regions) {
+    document.getElementById("regions-section").hidden = true;
+    return;
+  }
+  document.querySelectorAll("input[data-region]").forEach((cb) => {
+    const st = REGION_STYLE[cb.dataset.region];
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.borderTop = `${Math.max(2, st.weight)}px ${st.dashArray ? "dashed" : "solid"} ${st.color}`;
+    cb.after(swatch);
+    cb.addEventListener("change", () => toggleRegion(cb.dataset.region, cb.checked));
+    if (cb.checked) toggleRegion(cb.dataset.region, true);
+  });
+  const labels = document.getElementById("region-labels");
+  regions.labels = labels.checked;
+  labels.addEventListener("change", () => { regions.labels = labels.checked; updateRegionLabels(); });
+  regions.labelGroup.addTo(map);
+  map.on("moveend", updateRegionLabels);
+  document.getElementById("regions-source").textContent = state.manifest.regions.source;
+}
+
+// Położenie punktu: gmina (z nazwą powiatu i województwa) i mezoregion (z całą hierarchią) -
+// wyszukiwane zawsze, niezależnie od włączonych warstw; pliki pobierane przy pierwszym dymku.
+async function locate(latlng) {
+  const levels = regionLevels();
+  const [communes, finest] = await Promise.all([
+    featureIndex(state.manifest.boundaries.gminy),
+    levels.length ? featureIndex(state.manifest.regions.files[levels[levels.length - 1].key]) : [],
+  ]);
+  return { gmina: findFeature(communes, latlng), region: findFeature(finest, latlng) };
+}
+
+function locationRows(loc) {
+  const row = (k, v, extra = "") =>
+    `<tr><td>${k}</td><td>${v || "–"}${extra ? ` <span class="code">(${extra})</span>` : ""}</td></tr>`;
+  const sep = (t) => `<tr class="sep"><td colspan="2">${t}</td></tr>`;
+  const note = (t) => `<tr><td colspan="2" class="muted">${t}</td></tr>`;
+  if (loc === undefined) return sep("Położenie") + note("wczytywanie granic…");
+  if (loc === null) return sep("Położenie") + note("nie udało się wczytać granic");
+  const g = loc.gmina;
+  let html = sep("Administracja") + (g
+    ? row("województwo", g.wojewodztwo) + row("powiat", g.powiat) + row("gmina", g.nazwa, g.rodzaj)
+    : note("poza granicami Polski"));
+  html += sep("Regiony fizycznogeograficzne");
+  const r = loc.region;
+  if (!r) return html + note("poza zasięgiem regionalizacji");
+  const levels = regionLevels();
+  levels.forEach((lv, i) => {
+    const last = i === levels.length - 1;
+    html += row(lv.label, last ? r.nazwa : r[lv.label], last ? r.kod : r[`kod_${lv.label}`]);
+  });
+  return html;
+}
+
+// Dymek: położenie + wartości warstw; każda część pojawia się, gdy jej dane są gotowe.
+async function fillPopup(setContent, head, latlng) {
+  let rows = null, loc;
+  const render = () => setContent(`${head}${locationRows(loc)}${rows ? samplesTable(rows) : ""}</table></div>`);
+  render();
+  await Promise.all([
+    sampleAll(latlng).then((r) => { rows = r; render(); }),
+    locate(latlng).then((l) => { loc = l; render(); }, () => { loc = null; render(); }),
+  ]);
 }
 
 // ---- stacje ------------------------------------------------------------------------------------
@@ -652,8 +882,7 @@ async function openStationPopup(st) {
     `<tr><td>kategoria</td><td>${st.cat.name}</td></tr>${extra}` +
     `<tr><td>położenie</td><td>${st.lat.toFixed(4)}° N, ${st.lon.toFixed(4)}° E</td></tr>`;
   st.marker.bindPopup(`${head}</table></div>`, { maxWidth: 380 }).openPopup();
-  const rows = await sampleAll(L.latLng(st.lat, st.lon));
-  st.marker.setPopupContent(`${head}${samplesTable(rows)}</table></div>`);
+  await fillPopup((html) => st.marker.setPopupContent(html), head, L.latLng(st.lat, st.lon));
 }
 
 function refreshStations() {
@@ -764,6 +993,7 @@ async function main() {
   bindScaleControls();
   bindDisplayControls();
   bindBoundaryControls();
+  bindRegionControls();
   bindStationControls();
   setActiveLayer("anomaly_model");
   stations.group.addTo(map);
@@ -772,7 +1002,8 @@ async function main() {
     complete: (res) => addStations(res.data, "IMGW"),
   });
   document.getElementById("credits").innerHTML =
-    `Dane: NMT GUGiK 100 m; nocne LST VIIRS (NASA LP DAAC, 2023–2026, 00–05 UTC); granice PRG; stacje IMGW-PIB. ` +
+    `Dane: NMT GUGiK 100 m; nocne LST VIIRS (NASA LP DAAC, 2023–2026, 00–05 UTC); granice PRG; ` +
+    `regiony fizycznogeograficzne: Solon i in. 2018; stacje IMGW-PIB. ` +
     `Cieniowanie: ${state.manifest.hillshade.description}. ` +
     `Model: ${state.manifest.modelLabel}. Dane zbudowane ${state.manifest.created.slice(0, 10)}.`;
 }
