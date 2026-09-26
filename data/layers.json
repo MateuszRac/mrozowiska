@@ -1,6 +1,6 @@
 {
  "title": "Mrozowiska w Polsce - mapa interaktywna",
- "created": "2026-09-25T13:27:42+00:00",
+ "created": "2026-09-26T19:54:50+00:00",
  "bounds": [
   [
    48.9,
@@ -171,6 +171,27 @@
     }
    ],
    "description": "U-Net po treningu na Kaggle (GPU), najlepsza epoka 9 z 29. Klasy przewidywanej anomalii."
+  },
+  {
+   "id": "anomaly_100m",
+   "name": "Przewidywana anomalia nocna (downscaling 100 m)",
+   "group": "Model",
+   "unit": "K",
+   "tiles": "anomaly_100m",
+   "offset": -60.0,
+   "scale": 0.002,
+   "max_zoom": 10,
+   "palette": "RdBu_r",
+   "range": [
+    -2.5,
+    2.5
+   ],
+   "scale_type": "linear",
+   "symmetric": true,
+   "zero_as_background": false,
+   "dynamic": true,
+   "classes": [],
+   "description": "Równanie topograficzne (TPI 0,5–10 km, zagłębienia, TWI, nachylenie, wysokość) dopasowane do predykcji U-Net i zastosowane w 100 m, plus gładka reszta: średnia w każdej komórce 1 km równa się predykcji U-Net. Równanie odtwarza pole U-Net z R² 0,61 (test). Szczegóły poniżej 1 km to ekstrapolacja zależności od terenu - VIIRS ich nie widzi."
   },
   {
    "id": "anomaly_observed",

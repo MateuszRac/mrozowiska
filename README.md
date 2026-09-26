@@ -13,6 +13,9 @@ pochodzą z numerycznego modelu terenu, nocnych obserwacji satelitarnych VIIRS i
   bezodpływowych, Topographic Wetness Index.
 - **Model:** przewidywana nocna anomalia temperatury powierzchni względem otoczenia (σ = 10 km)
   i klasy mrozowisk. U-Net, siatka 1 km.
+- **Downscaling 100 m:** równanie topograficzne (TPI 0,5–10 km, zagłębienia, TWI, nachylenie,
+  wysokość) dopasowane do modelu U-Net i zastosowane w siatce 100 m. Średnia w każdej komórce
+  1 km równa się predykcji U-Net; szczegóły poniżej 1 km to ekstrapolacja zależności od terenu.
 - **Obserwacje:** średnia anomalia z 2222 nocy VIIRS 2023–2026 (00–05 UTC).
 - **Porównanie:** różnica obserwacje VIIRS − model.
 - **Granice:** województwa, powiaty, gminy.
